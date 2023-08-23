@@ -9,3 +9,8 @@ summary: |
 assumes:
   - juju >= 3.0.2
   - k8s-api
+provides:
+  ingress-per-unit:
+    interface: ingress_per_unit
+    limit: 1
+    optional: false

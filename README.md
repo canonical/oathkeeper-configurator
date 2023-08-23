@@ -16,7 +16,9 @@ You can follow the deployment status with `watch -c juju status --color`.
 
 ## Configuration
 
-<!-- TODO: Expand once juju configs are in place -->
+```bash
+juju config oathkeeper-configurator access_rules=@access_rules.json root_url=http://foo.bar/{{juju_model}}-{{juju_unit}}
+```
 
 ## Integrations
 
