@@ -84,7 +84,7 @@ class _RouteConfig:
             error = None
             if not _is_not_empty(obj):
                 error = (
-                    f"`{name}` not configured; run `juju config <traefik-route-charm> "
+                    f"`{name}` not configured; run `juju config oathkeeper-configurator"
                     f"{name}=<{name.upper()}>"
                 )
 
@@ -254,11 +254,6 @@ class OathkeeperConfiguratorCharm(CharmBase):
     def _ipu_relation(self) -> Optional[Relation]:
         """The relation with the unit requesting ingress."""
         return self._get_relation(self._ingress_relation_name)
-
-    @property
-    def _traefik_route_relation(self) -> Optional[Relation]:
-        """The relation with the (Traefik) charm providing traefik-route."""
-        return self._get_relation(self._traefik_route_relation_name)
 
     @property
     def _remote_routed_units(self) -> Tuple[Unit, ...]:
