@@ -6,9 +6,10 @@ This charm is used to configure and integrate downstream applications with Charm
 
 Please note that this charm is currently work in progress.
 
-## Usage
+## Deployment
 
-```bash
+To deploy this charm, run:
+```commandline
 juju deploy oathkeeper-configurator
 ```
 
@@ -16,13 +17,25 @@ You can follow the deployment status with `watch -c juju status --color`.
 
 ## Configuration
 
-```bash
+This charm requires `access_rules` and `root_url` config options to be provided. To set them up, run:
+```commandline
 juju config oathkeeper-configurator access_rules=@access_rules.json root_url=http://foo.bar/{{juju_model}}-{{juju_unit}}
 ```
+where `access_rules.json` is a json-formatted file that contains the Oathkeeper access rules.
+
+Learn more about access rules [here](https://www.ory.sh/docs/oathkeeper/api-access-rules).
+
+<!-- TODO: Add a note about action to get urls once IAM-427 is done -->
 
 ## Integrations
 
-<!-- TODO: Expand once integrations are in place -->
+This charm provides an `ingress-per-unit` relation using the `ingress_per_unit` relation interface, with limit 1.
+This relation is required to set up ingress routes for charmed workloads.
+
+To integrate a charm using this interface, run:
+```commandline
+juju integrate oathkeeper-configurator <your-charm>
+```
 
 ## Security
 
