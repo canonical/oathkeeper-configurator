@@ -1,7 +1,7 @@
 # Copyright 2023 Canonical Ltd.
 # See LICENSE file for licensing details.
 
-
+import pytest
 from ops.model import ActiveStatus, BlockedStatus
 from ops.testing import Harness
 
@@ -76,3 +76,15 @@ def test_configs_and_relations_set(harness: Harness) -> None:
     assert harness.charm._is_traefik_config_ready
     assert harness.charm.ingress_per_unit.is_ready(harness.charm._ipu_relation)
     assert isinstance(harness.charm.unit.status, ActiveStatus)
+
+
+def test_routing_rules_rendering(harness: Harness, caplog: pytest.LogCaptureFixture) -> None:
+    """Test that the charm renders a routing rule with an expected value."""
+    harness.update_config({"access_rules": ACCESS_RULES_CONFIG})
+    ipu_relation_id = mock_ipu_relation_with_config(harness)
+
+    harness.update_relation_data(ipu_relation_id, REMOTE_UNIT_NAME, SAMPLE_INGRESS_DATA)
+    assert (
+        "Generated unit configs: {'http': {'routers': {'juju-remote-0-testing-router': {'rule': 'Host(`foo.bar/testing-remote-0`)', 'service': 'juju-remote-0-testing-service', 'entryPoints': ['web'], 'middlewares': ['oathkeeper']}}, 'services': {'juju-remote-0-testing-service': {'loadBalancer': {'servers': [{'url': 'http://foo.bar/testing-remote-0'}]}}}}}"
+        in caplog.messages
+    )
