@@ -11,7 +11,7 @@ import logging
 import textwrap
 from dataclasses import dataclass
 from itertools import starmap
-from typing import Any, Iterable, Optional, Tuple
+from typing import Any, Iterable, Optional
 from urllib.parse import urlparse
 
 import jinja2
@@ -23,7 +23,7 @@ from charms.traefik_k8s.v1.ingress_per_unit import (
 from ops.charm import CharmBase, ConfigChangedEvent, EventBase
 from ops.framework import StoredState
 from ops.main import main
-from ops.model import ActiveStatus, BlockedStatus, MaintenanceStatus, Relation, Unit
+from ops.model import ActiveStatus, BlockedStatus, MaintenanceStatus, Relation
 
 from types_ import TraefikConfig, UnitConfig
 
@@ -242,23 +242,10 @@ class OathkeeperConfiguratorCharm(CharmBase):
             logger.warning(f"more than one relation for {endpoint}")
         return relations[0]
 
-    @staticmethod
-    def _get_remote_units_from_relation(
-        relation: Optional[Relation],
-    ) -> Tuple[Unit, ...]:
-        if not relation:
-            return ()
-        return tuple(relation.units)
-
     @property
     def _ipu_relation(self) -> Optional[Relation]:
         """The relation with the unit requesting ingress."""
         return self._get_relation(self._ingress_relation_name)
-
-    @property
-    def _remote_routed_units(self) -> Tuple[Unit, ...]:
-        """The remote units in need of ingress."""
-        return self._get_remote_units_from_relation(self._ipu_relation)
 
     def _config_for_unit(self, unit_data: RequirerData) -> RouteConfig:
         """Get the _RouteConfig for the provided `unit_data`."""
