@@ -326,7 +326,7 @@ class OathkeeperConfiguratorCharm(CharmBase):
 
     def _on_ingress_data_provided(self, event: IngressDataReadyEvent) -> None:
         if not self._is_traefik_config_ready:
-            logger.info("Configurator charm not ready. Deferring the event")
+            logger.info("Traefik-related config or relations not ready. Deferring the event")
             event.defer()
             return
 
@@ -359,7 +359,6 @@ class OathkeeperConfiguratorCharm(CharmBase):
         - If the ingress-per-unit relation is missing or not ready, the status is blocked
         - Else status is active
         """
-        logger.info(f"Flag value: {self._stored.invalid_config}")
         if self._stored.invalid_config is True:
             return
         if not self.access_rules_configured:
