@@ -54,18 +54,26 @@ class TemplateKeyError(RuntimeError):
         - `juju_unit`
     """
 
-    def __init__(self, template: str, key: str, *args):
+    def __init__(
+        self,
+        template: str,
+        key: str,
+        model_name: Optional[str] = None,
+        app_name: Optional[str] = None,
+        unit_name: Optional[str] = None,
+        *args,
+    ):
         msg = textwrap.dedent(
             f"""Unable to render the template {template!r}: {key!r} unknown.
-                - `juju_model`
-                - `juju_application`
-                - `juju_unit`"""
+                - `juju_model`: {model_name}
+                - `juju_application`: {app_name}
+                - `juju_unit`: {unit_name}"""
         )
         super().__init__(msg, *args)
 
 
 @dataclass
-class RouteConfig:
+class RawRouteConfig:
     """Route configuration."""
 
     root_url: str
@@ -74,7 +82,7 @@ class RouteConfig:
 
 
 @dataclass
-class _RouteConfig:
+class _RawRouteConfig:
     root_url: str
     rule: Optional[str] = None
 
@@ -102,7 +110,6 @@ class _RouteConfig:
                 # try rendering with dummy values; it should succeed.
                 self.render(model_name="foo", unit_name="bar", app_name="baz")
             except (TemplateKeyError, RuleDerivationError) as e:
-                logger.info("Failed to render a template with dummy values")
                 logger.error(e)
                 return False
 
@@ -113,7 +120,7 @@ class _RouteConfig:
         valid = starmap(_check_var, ((self.rule, "rule"), (self.root_url, "root_url")))
         return all(valid)
 
-    def render(self, model_name: str, unit_name: str, app_name: str) -> "RouteConfig":
+    def render(self, model_name: str, unit_name: str, app_name: str) -> "RawRouteConfig":
         """Fills in the blanks in the templates."""
 
         def _render(obj: str) -> Optional[str]:
@@ -126,7 +133,7 @@ class _RouteConfig:
                 )
             except jinja2.UndefinedError as e:
                 undefined_key = e.message.split()[0].strip(r"'")
-                raise TemplateKeyError(obj, undefined_key) from e
+                raise TemplateKeyError(obj, undefined_key, model_name, app_name, unit_name) from e
 
         url = _render(self.root_url)
         if not self.rule:
@@ -136,14 +143,14 @@ class _RouteConfig:
 
         # an easily recognizable id for the traefik services
         id_ = "-".join((unit_name, model_name))
-        return RouteConfig(rule=rule, root_url=url, id_=id_)
+        return RawRouteConfig(rule=rule, root_url=url, id_=id_)
 
     @staticmethod
     def generate_rule_from_url(url: str) -> Optional[str]:
         """Derives a Traefik router Host rule from the provided `url`'s hostname."""
         url_ = urlparse(url)
         if not url_.hostname:
-            logger.info(f"Parsing url {url_} not valid")
+            logger.error(f"Parsing url {url_} not valid")
             raise RuleDerivationError(url)
         return f"Host(`{url_.hostname}`)"
 
@@ -186,24 +193,26 @@ class OathkeeperConfiguratorCharm(CharmBase):
             raise InvalidConfigError(f"Failed to decode json: {e}")
 
     @property
-    def _config(self) -> _RouteConfig:
-        return _RouteConfig(rule=self.config.get("rule"), root_url=self.config.get("root_url"))
+    def _route_config(self) -> _RawRouteConfig:
+        return _RawRouteConfig(rule=self.config.get("rule"), root_url=self.config.get("root_url"))
 
     @property
     def rule(self) -> Optional[str]:
         """The Traefik rule this charm is responsible for configuring."""
-        return self._config.rule
+        return self._route_config.rule
 
     @property
     def root_url(self) -> Optional[str]:
         """The advertised url for the charm requesting ingress."""
-        return self._config.root_url
+        return self._route_config.root_url
 
-    def _render_config(self, model_name: str, unit_name: str, app_name: str) -> RouteConfig:
-        return self._config.render(model_name=model_name, unit_name=unit_name, app_name=app_name)
+    def _render_config(self, model_name: str, unit_name: str, app_name: str) -> RawRouteConfig:
+        return self._route_config.render(
+            model_name=model_name, unit_name=unit_name, app_name=app_name
+        )
 
     @staticmethod
-    def _generate_traefik_unit_config(config: RouteConfig) -> UnitConfig:
+    def _generate_traefik_unit_config(config: RawRouteConfig) -> UnitConfig:
         rule, config_id, url = config.rule, config.id_, config.root_url
 
         traefik_router_name = f"juju-{config_id}-router"
@@ -233,13 +242,11 @@ class OathkeeperConfiguratorCharm(CharmBase):
         return traefik_config
 
     def _get_relation(self, endpoint: str) -> Optional[Relation]:
-        """Fetches the Relation for endpoint and checks that there's only 1."""
+        """Fetches the Relation for an endpoint."""
         relations = self.model.relations.get(endpoint)
         if not relations:
             logger.info(f"no relations yet for {endpoint}")
             return None
-        if len(relations) > 1:
-            logger.warning(f"more than one relation for {endpoint}")
         return relations[0]
 
     @property
@@ -247,14 +254,10 @@ class OathkeeperConfiguratorCharm(CharmBase):
         """The relation with the unit requesting ingress."""
         return self._get_relation(self._ingress_relation_name)
 
-    def _config_for_unit(self, unit_data: RequirerData) -> RouteConfig:
-        """Get the _RouteConfig for the provided `unit_data`."""
+    def _config_for_unit(self, unit_data: RequirerData) -> RawRouteConfig:
+        """Get the _RawRouteConfig for the provided `unit_data`."""
         unit_name = unit_data["name"]
         model_name = unit_data["model"]
-
-        # sanity checks
-        assert unit_name is not None, "remote unit did not provide its name"
-        assert "/" in unit_name, unit_name
 
         return self._render_config(
             model_name=model_name,
@@ -283,7 +286,7 @@ class OathkeeperConfiguratorCharm(CharmBase):
 
     @property
     def _is_traefik_configuration_valid(self) -> bool:
-        if not self._config.is_valid:
+        if not self._route_config.is_valid:
             self._stored.invalid_config = True
             return False
 
@@ -345,6 +348,7 @@ class OathkeeperConfiguratorCharm(CharmBase):
             return
         if not self.access_rules_configured:
             self.unit.status = BlockedStatus("Missing required configuration value: access_rules")
+            return
         # TODO: Non-charms will not require ipu relation, adjust it
         if not self._ipu_relation:
             self.unit.status = BlockedStatus("Awaiting to be related via ingress-per-unit")
@@ -352,8 +356,8 @@ class OathkeeperConfiguratorCharm(CharmBase):
         if not self.ingress_per_unit.is_ready(self._ipu_relation):
             self.unit.status = BlockedStatus("ingress-per-unit relation is not ready")
             return
-        else:
-            self.unit.status = ActiveStatus()
+
+        self.unit.status = ActiveStatus()
 
 
 if __name__ == "__main__":
