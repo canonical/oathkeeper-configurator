@@ -25,7 +25,7 @@ from ops.framework import StoredState
 from ops.main import main
 from ops.model import ActiveStatus, BlockedStatus, MaintenanceStatus, Relation
 
-from types_ import TraefikConfig, UnitConfig
+from traefik_route_types import TraefikConfig, UnitConfig
 
 logger = logging.getLogger(__name__)
 
