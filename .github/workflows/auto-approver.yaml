@@ -1,0 +1,26 @@
+name: auto-approver
+run-name: CI for approving PRs
+
+on:
+  push:
+    branches:
+      - "renovate/**"
+      - "automated-update-charm-libs"
+
+jobs:
+  autoapprove:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@3df4ab11eba7bda6032a0b82a6bb43b11571feac # v4
+      - name: Approve PR
+        run: |
+          gh pr review --approve || true
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+      - name: Enable automerge if required
+        run: |
+          if [[ $(gh pr view --json body | grep "\*\*Automerge\*\*: Enabled") ]]; then
+            gh pr merge --auto --merge || true
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
